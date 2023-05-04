@@ -15,6 +15,46 @@ Works with Tracy 0.8.2 and Paradise's fork of byond-tracy as of [6168fac975061bb
 
 This is approximately 5x faster than the [Python script it was based on](https://github.com/ParadiseSS13/byond-tracy/blob/6168fac975061bb20faf26c0d5c0f41ca4be6e75/replay.py), and has proper type safety. The former may not sound like an issue with small traces, but when you have a profile spanning an entire 2 hour round (40GB), the speed **REALLY** starts to matter.
 
+A 2 hour 20 minute round on Paradise produced a `.utracy` file 49GB big. The python script took 48 minutes and 20 seconds (including save time) to replay it.
+```
+$ time capture -o python_output.tracy
+Connecting to 127.0.0.1:8086...
+Queue delay: 10 ns
+Timer resolution: 7 ns
+  12.46 Mbps / 90.4% =  13.78 Mbps | Tx: 9854.02 MB | 27.1 GB | 2:21:24
+Frames: 168545
+Time span: 2:21:24
+Zones: 1,044,465,597
+Elapsed time: 47:12.6
+Saving trace... done!
+Trace size 9415.84 MB (36.25% ratio)
+
+real    48m20.489s
+user    0m0.015s
+sys     0m0.000s
+```
+
+This application took 9 minutes and 7 seconds (including save time) to replay it.
+```
+$ time capture -o cs_output.tracy
+Connecting to 127.0.0.1:8086...
+Queue delay: 10 ns
+Timer resolution: 7 ns
+ 182.30 Mbps / 41.1% = 444.08 Mbps | Tx: 10.31 GB | 27.1 GB | 2:21:24
+Frames: 168545
+Time span: 2:21:24
+Zones: 1,044,465,597
+Elapsed time: 8:04.3
+Saving trace... done!
+Trace size 9415.75 MB (36.25% ratio)
+
+real    9m7.589s
+user    0m0.000s
+sys     0m0.000s
+```
+
+Thats 18.8% of the time the Python script took.
+
 ## Contributing 
 
 Just make PRs and test them, the contribution rules on this repo are pretty loose, just don't take a mile.
