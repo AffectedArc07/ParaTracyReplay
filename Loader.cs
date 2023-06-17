@@ -149,19 +149,26 @@ namespace ParaTracyReplay
             // Inform of load
             Log.Logger.Information($"Successfully loaded {source_locations.Count} source locations");
 
-            // Create our server endpoint
-            IPEndPoint socket_endpoint = new IPEndPoint(IPAddress.Any, 8086);
-            using Socket server = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            server.Bind(socket_endpoint);
-            // Allow 1 client max
-            server.Listen(1);
 
-            // Wait here
-            Log.Logger.Information($"Waiting for connection on {socket_endpoint.Address}:{socket_endpoint.Port}...");
+            async ValueTask<Socket> Accept()
+			{
+				// Create our server endpoint
+				IPEndPoint socket_endpoint = new IPEndPoint(IPAddress.Any, 8086);
+				using Socket server = new Socket(SocketType.Stream, ProtocolType.Tcp);
+                server.Bind(socket_endpoint);
+                // Allow 1 client max
+                server.Listen(1);
 
-            using Socket socket = await server.AcceptAsync();
+                // Wait here
+                Log.Logger.Information($"Waiting for connection on {socket_endpoint.Address}:{socket_endpoint.Port}...");
 
-            Log.Logger.Information($"Connection established");
+                return await server.AcceptAsync();
+            }
+
+            using Socket socket = await Accept();
+
+            DateTimeOffset startTime = DateTimeOffset.Now;
+			Log.Logger.Information($"Connection established");
 
             // Read 8 bytes for the client name
             byte[] data_buffer = ArrayPool<byte>.Shared.Rent(8);
@@ -222,7 +229,7 @@ namespace ParaTracyReplay
             Array.Copy(file_header.HostInfo, net_header.HostInfo, 64);
 
             // Send the network header
-            await using var socketStream = new NetworkStream(socket, false);
+            await using NetworkStream socketStream = new NetworkStream(socket, false);
 
             // Setup some vars for the network handling
             const int event_array_size = 24;
@@ -254,8 +261,7 @@ namespace ParaTracyReplay
                 byte[]? encodedBuffer = null;
 				try
                 {
-                    const int SendHeaderSize = 8;
-                    int sendBufferSize;
+                    const int SendHeaderSize = 4;
                     try
 					{
 						// Get the amount written
@@ -270,9 +276,8 @@ namespace ParaTracyReplay
 						frameStream = null;
 
 						var encodedMaxSize = LZ4Codec.MaximumOutputSize(frameLength);
-						sendBufferSize = encodedMaxSize + SendHeaderSize;
-						encodedBuffer = ArrayPool<byte>.Shared.Rent(sendBufferSize);
-
+						var encodedBufferSize = encodedMaxSize + SendHeaderSize;
+						encodedBuffer = ArrayPool<byte>.Shared.Rent(encodedBufferSize);
                         encodedSize = LZ4Codec.Encode(frameBuffer, 0, frameLength, encodedBuffer, SendHeaderSize, encodedMaxSize);
                     }
                     finally
@@ -281,10 +286,26 @@ namespace ParaTracyReplay
 							ArrayPool<byte>.Shared.Return(frameBuffer);
                     }
 
-					BinaryPrimitives.WriteUInt32LittleEndian(new Span<byte>(encodedBuffer, 0, sizeof(uint)), (uint)encodedSize);
+					BinaryPrimitives.WriteInt32LittleEndian(new Span<byte>(encodedBuffer), encodedSize);
 
-					await lastSocketWrite;
-                    lastSocketWrite = socketStream.WriteAsync(new ReadOnlyMemory<byte>(encodedBuffer, 0, sendBufferSize));
+                    var awaiting = lastSocketWrite;
+					async ValueTask QueueSocketWrite()
+					{
+                        var ownedBuffer = encodedBuffer;
+                        encodedBuffer = null;
+                        try
+                        {
+                            await awaiting;
+							var sendSpan = new ReadOnlyMemory<byte>(ownedBuffer, 0, encodedSize + SendHeaderSize);
+							await socketStream.WriteAsync(sendSpan);
+                        }
+                        finally
+						{
+							ArrayPool<byte>.Shared.Return(ownedBuffer);
+						}
+					}
+
+                    lastSocketWrite = QueueSocketWrite();
                 }
                 finally
                 {
@@ -314,10 +335,14 @@ namespace ParaTracyReplay
                         async ValueTask Next()
                         {
                             await awaiting;
-                            if (frameStream!.Position + next.WriteSize > maximumFrameSize)
+                            var initialPosition = frameStream!.Position;
+							var expectedNewPosition = initialPosition + next.WriteSize;
+                            var needNewFrame = expectedNewPosition > maximumFrameSize;
+							if (needNewFrame)
                                 await NewFrame();
 
                             await next.Write(frameWriter!);
+                            Debug.Assert(needNewFrame || expectedNewPosition == frameStream.Position);
                         }
 
                         lastFrameWrite = Next();
@@ -329,7 +354,7 @@ namespace ParaTracyReplay
                         async ValueTask Next()
                         {
                             await awaiting;
-                            if (frameStream!.Position + +1 > maximumFrameSize)
+                            if (frameStream!.Position + 1 > maximumFrameSize)
                                 await NewFrame();
 
                             await frameWriter!.WriteAsync(thing);
@@ -360,22 +385,90 @@ namespace ParaTracyReplay
 
                     void QueueWriteStringResponse(string str, ulong pointer, byte stringtype)
                     {
-                        // Get the length of the array
-                        ushort string_length = (ushort)str.Length;
-
                         // Make the event
                         NetworkStringData string_packet = new NetworkStringData()
                         {
                             Type = stringtype,
                             Pointer = pointer,
-                            String = str
+                            String = str.ToCharArray()
                         };
 
                         // And fire
                         QueueEncodedWrite(string_packet);
                     }
 
-                    Log.Logger.Information("Sending proc events to client...");
+					async ValueTask ReceiveTask()
+					{
+						// Set this timeout to account for the fact we dont handle the data done packet if that even exists
+						socket.ReceiveTimeout = 1;
+						using var receiveReader = new AsyncBinaryReader(socketStream, Encoding.UTF8, true);
+						while (true)
+						{
+							// Decode the request
+							NetworkRequest nr = new NetworkRequest();
+							if (!await nr.Read(receiveReader))
+								break;
+
+
+							// Figure out what we have
+							switch (nr.Type)
+							{
+								// Source location query, handle it
+								case Constants.NetworkQuerySrcloc:
+									SourceLocation sourceloc = source_locations[BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer))];
+									NetworkSourceLocation sourceloc_packet = new NetworkSourceLocation()
+									{
+										Type = Constants.NetworkEventSrcloc,
+										Name = sourceloc.Name,
+										Function = sourceloc.Function,
+										File = sourceloc.File,
+										Line = sourceloc.Line,
+										ColourR = (byte)((sourceloc.Colour >> 0x00) & 0xFF),
+										ColourG = (byte)((sourceloc.Colour >> 0x08) & 0xFF),
+										ColourB = (byte)((sourceloc.Colour >> 0x10) & 0xFF)
+									};
+									QueueEncodedWrite(sourceloc_packet);
+									break;
+
+								// String query, handle it
+								case Constants.NetworkQueryString:
+									QueueWriteStringResponse(strings[nr.Pointer], BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseStringData);
+									break;
+
+								// No symbol code handling
+								case Constants.NetworkQuerySymbolCode:
+									QueueEncodedByteWrite(Constants.NetworkResponseSymbolCodeNotAvailable);
+									break;
+
+								// No source code handling
+								case Constants.NetworkQuerySourceCode:
+									QueueEncodedByteWrite(Constants.NetworkResponseSourceCodeNotAvailable);
+									break;
+
+								// No data transfer handling
+								case Constants.NetworkQueryDataTransfer:
+									QueueEncodedByteWrite(Constants.NetworkResponseServerQueryNoop);
+									break;
+
+								// No partial data transfer handling
+								case Constants.NetworkQueryDataTransferPart:
+									QueueEncodedByteWrite(Constants.NetworkResponseServerQueryNoop);
+									break;
+
+								// Handle thread names. Only one.
+								case Constants.NetworkQueryThreadString:
+									QueueWriteStringResponse("main", BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseThreadName);
+									break;
+
+								// Infom on packets we dont recognise
+								default:
+									Log.Logger.Warning($"Unknown request from Tracy (Packet type: {nr.Type})");
+									break;
+							}
+						}
+					}
+
+					Log.Logger.Information("Sending proc events to client...");
 
                     // Now read file events and send them off
                     // A FileEvent is 24 bytes (maximum), so read into an array of that size
@@ -464,77 +557,13 @@ namespace ParaTracyReplay
 
                     await NewFrame();
 
-                    Log.Logger.Information("Proc events sent. Negotiating string info.");
+                    var totalTime = DateTimeOffset.Now - startTime;
 
-                    // Set this timeout to account for the fact we dont handle the data done packet if that even exists
-                    socket.ReceiveTimeout = 1;
+                    Log.Logger.Information($"Proc events sent. Took {totalTime.TotalSeconds}s");
+
                     try
-                    {
-                        using var receiveReader = new AsyncBinaryReader(socketStream, Encoding.UTF8, true);
-                        while (true)
-                        {
-                            // Decode the request
-                            NetworkRequest nr = new NetworkRequest();
-                            if (!await nr.Read(receiveReader))
-                                break;
-
-
-                            // Figure out what we have
-                            switch (nr.Type)
-                            {
-                                // Source location query, handle it
-                                case Constants.NetworkQuerySrcloc:
-                                    SourceLocation sourceloc = source_locations[BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer))];
-                                    NetworkSourceLocation sourceloc_packet = new NetworkSourceLocation()
-                                    {
-                                        Type = Constants.NetworkEventSrcloc,
-                                        Name = sourceloc.Name,
-                                        Function = sourceloc.Function,
-                                        File = sourceloc.File,
-                                        Line = sourceloc.Line,
-                                        ColourR = (byte)((sourceloc.Colour >> 0x00) & 0xFF),
-                                        ColourG = (byte)((sourceloc.Colour >> 0x08) & 0xFF),
-                                        ColourB = (byte)((sourceloc.Colour >> 0x10) & 0xFF)
-                                    };
-                                    QueueEncodedWrite(sourceloc_packet);
-                                    break;
-
-                                // String query, handle it
-                                case Constants.NetworkQueryString:
-                                    QueueWriteStringResponse(strings[nr.Pointer], BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseStringData);
-                                    break;
-
-                                // No symbol code handling
-                                case Constants.NetworkQuerySymbolCode:
-                                    QueueEncodedByteWrite(Constants.NetworkResponseSymbolCodeNotAvailable);
-                                    break;
-
-                                // No source code handling
-                                case Constants.NetworkQuerySourceCode:
-                                    QueueEncodedByteWrite(Constants.NetworkResponseSourceCodeNotAvailable);
-                                    break;
-
-                                // No data transfer handling
-                                case Constants.NetworkQueryDataTransfer:
-                                    QueueEncodedByteWrite(Constants.NetworkResponseServerQueryNoop);
-                                    break;
-
-                                // No partial data transfer handling
-                                case Constants.NetworkQueryDataTransferPart:
-                                    QueueEncodedByteWrite(Constants.NetworkResponseServerQueryNoop);
-                                    break;
-
-                                // Handle thread names. Only one.
-                                case Constants.NetworkQueryThreadString:
-                                    QueueWriteStringResponse("main", BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseThreadName);
-                                    break;
-
-                                // Infom on packets we dont recognise
-                                default:
-                                    Log.Logger.Warning($"Unknown request from Tracy (Packet type: {nr.Type})");
-                                    break;
-                            }
-                        }
+					{
+                        await ReceiveTask(); // TODO: Can be done in parallel with proc sending?
                     }
                     catch (SocketException exc)
                     {

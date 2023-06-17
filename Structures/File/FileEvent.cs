@@ -1,4 +1,6 @@
-﻿using Overby.Extensions.AsyncBinaryReaderWriter;
+﻿using System.Diagnostics;
+
+using Overby.Extensions.AsyncBinaryReaderWriter;
 
 namespace ParaTracyReplay.Structures.File
 {
@@ -34,14 +36,19 @@ namespace ParaTracyReplay.Structures.File
         public override async ValueTask ReadImpl(AsyncBinaryReader reader)
         {
             // Skip the padding
-            if (reader.BaseStream.Position + 24 > reader.BaseStream.Length)
+            var expectedNewPosition = reader.BaseStream.Position + 24;
+			if (expectedNewPosition > reader.BaseStream.Length)
                 throw new EndOfStreamException();
 
-            Type = (await reader.ReadBytesAsync(8))[0];
+			Type = await reader.ReadByteAsync();
 
-            // Parse the event type
-            // Cast it based on the event type
-            _backingEvent = Type switch
+			Debug.Assert(Type != 0);
+
+			reader.BaseStream.Seek(7, SeekOrigin.Current);
+
+			// Parse the event type
+			// Cast it based on the event type
+			_backingEvent = Type switch
             {
                 Constants.FileEventZoneBegin => new FileZoneBegin(),
                 Constants.FileEventZoneEnd => new FileZoneEnd(),
@@ -52,6 +59,8 @@ namespace ParaTracyReplay.Structures.File
 
             // And read the data in
             await Event.ReadImpl(reader);
+
+            Debug.Assert(reader.BaseStream.Position == expectedNewPosition);
         }
     }
 }

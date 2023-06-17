@@ -32,6 +32,7 @@ namespace ParaTracyReplay.Structures.File
         {
             ThreadId = await reader.ReadUInt32Async();
             Colour = await reader.ReadUInt32Async();
+            reader.BaseStream.Seek(8, SeekOrigin.Current);
         }
     }
 }

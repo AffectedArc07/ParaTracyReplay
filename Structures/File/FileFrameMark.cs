@@ -33,7 +33,7 @@ namespace ParaTracyReplay.Structures.File
         {
             Name = await reader.ReadUInt32Async();
             // Skip padding bytes
-            await reader.ReadBytesAsync(4);
+            reader.BaseStream.Seek(4, SeekOrigin.Current);
             Timestamp = await reader.ReadInt64Async();
         }
     }

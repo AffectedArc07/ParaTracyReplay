@@ -148,7 +148,7 @@ namespace ParaTracyReplay.Structures
             //                                                                                                                                            POS:    0
             Signature = await reader.ReadUInt64Async();           // ("signature", ctypes.c_ulonglong),           Start at 0, read 8 bytes                POS:    8
             Version = await reader.ReadUInt32Async();             // ("version", ctypes.c_uint),                  Start at 8, read 4 bytes                POS:   12
-            await reader.ReadUInt32Async();                       //                                              Skip 4 bytes due to alignment rules     POS:   16
+            reader.BaseStream.Seek(4, SeekOrigin.Current);        //                                              Skip 4 bytes due to alignment rules     POS:   16
             Multiplier = await reader.ReadDoubleAsync();          // ("multiplier", ctypes.c_double),             Start at 16, read 8 bytes               POS:   24
             InitBegin = await reader.ReadInt64Async();            // ("init_begin", ctypes.c_longlong),           Start at 24, read 8 bytes               POS:   32
             InitEnd = await reader.ReadInt64Async();              // ("init_end", ctypes.c_longlong),             Start at 32, read 8 bytes               POS:   40
@@ -161,11 +161,11 @@ namespace ParaTracyReplay.Structures
             Flags = await reader.ReadByteAsync();                 // ("flags", ctypes.c_byte),                    Start at 88, read 1 byte                POS:   89
             CpuArch = await reader.ReadByteAsync();               // ("cpu_arch", ctypes.c_byte),                 Start at 89, read 1 byte                POS:   90
             CpuManufacturer = await reader.ReadCharsAsync(12);    // ("cpu_manufacturer", ctypes.c_char * 12),    Start at 90, read 12 bytes              POS:  102
-            await reader.ReadUInt16Async();                       //                                              Skip 2 bytes due to alignment rules     POS:  104
+			reader.BaseStream.Seek(2, SeekOrigin.Current);        //                                              Skip 2 bytes due to alignment rules     POS:  104
 			CpuId = await reader.ReadUInt32Async();               // ("cpu_id", ctypes.c_uint),                   Start at 104, read 4 bytes              POS:  108
             ProgramName = await reader.ReadCharsAsync(64);        // ("program_name", ctypes.c_char * 64),        Start at 108, read 64 bytes             POS:  172
             HostInfo = await reader.ReadCharsAsync(1024);         // ("host_info", ctypes.c_char * 1024)          Start at 172, read 1024 bytes           POS: 1196
-			await reader.ReadUInt32Async();                       //                                              Skip 4 bytes due to alignment rules     POS: 1200
+			reader.BaseStream.Seek(4, SeekOrigin.Current);        //                                              Skip 4 bytes due to alignment rules     POS: 1200
 		}
     }
 }

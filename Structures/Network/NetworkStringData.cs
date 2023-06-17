@@ -8,7 +8,7 @@ namespace ParaTracyReplay.Structures.Network
 
 		public byte Type { get; set; }
         public ulong Pointer { get; set; }
-        public string String { get; set; } = String.Empty;
+        public char[] String { get; set; } = Array.Empty<char>();
 
         /// <inheritdoc/>
         public override async ValueTask Write(AsyncBinaryWriter writer)
@@ -25,7 +25,7 @@ namespace ParaTracyReplay.Structures.Network
             Type = await reader.ReadByteAsync();
             Pointer = await reader.ReadUInt64Async();
             var stringLength = await reader.ReadUInt16Async();
-            String = (await reader.ReadCharsAsync(stringLength))?.ToString() ?? String.Empty;
+            String = await reader.ReadCharsAsync(stringLength);
         }
     }
 }
