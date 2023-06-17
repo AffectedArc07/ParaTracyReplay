@@ -12,6 +12,12 @@ using Serilog;
 using ParaTracyReplay.Structures;
 using ParaTracyReplay.Structures.File;
 using ParaTracyReplay.Structures.Network;
+using K4os.Compression.LZ4;
+using K4os.Compression.LZ4.Streams.Frames;
+using System.Diagnostics;
+using static System.Net.Mime.MediaTypeNames;
+using System.Buffers.Binary;
+using System;
 
 namespace ParaTracyReplay
 {
@@ -220,12 +226,14 @@ namespace ParaTracyReplay
 
             // Setup some vars for the network handling
             const int event_array_size = 24;
-            long timestamp = 0;
+            int maximumFrameSize = (int)Math.Floor((decimal)(Constants.NetworkMaxFrameSize / event_array_size));
+
+			long timestamp = 0;
             long threadId = 0;
 
             var encoderSettings = new LZ4EncoderSettings
             {
-                BlockSize = (int)Math.Floor((decimal)(Constants.NetworkMaxFrameSize / event_array_size)),
+                CompressionLevel = LZ4Level.L00_FAST,
             };
 
             async ValueTask FirstWrite()
@@ -236,244 +244,320 @@ namespace ParaTracyReplay
 
             ValueTask lastSocketWrite = FirstWrite();
 
-            await using (var lz4Stream = LZ4Stream.Encode(socketStream, encoderSettings, true))
+            byte[]? frameBuffer = null;
+            MemoryStream? frameStream = null;
+            AsyncBinaryWriter? frameWriter = null;
+
+            async ValueTask CloseFrame()
             {
-                using var encodedSocketWriter = new AsyncBinaryWriter(lz4Stream, Encoding.ASCII, true);
-                void QueueNetworkWrite(StructureBase next)
+                int encodedSize;
+                byte[]? encodedBuffer = null;
+				try
                 {
-                    var awaiting = lastSocketWrite;
-                    async ValueTask Next()
-                    {
-                        await awaiting;
-                        await next.Write(encodedSocketWriter);
+                    const int SendHeaderSize = 8;
+                    int sendBufferSize;
+                    try
+					{
+						// Get the amount written
+						frameWriter?.Dispose();
+                        frameWriter = null;
+
+                        if (frameStream == null)
+                            return;
+
+                        var frameLength = (int)frameStream.Position;
+						await frameStream.DisposeAsync();
+						frameStream = null;
+
+						var encodedMaxSize = LZ4Codec.MaximumOutputSize(frameLength);
+						sendBufferSize = encodedMaxSize + SendHeaderSize;
+						encodedBuffer = ArrayPool<byte>.Shared.Rent(sendBufferSize);
+
+                        encodedSize = LZ4Codec.Encode(frameBuffer, 0, frameLength, encodedBuffer, SendHeaderSize, encodedMaxSize);
+                    }
+                    finally
+					{
+						if (frameBuffer != null)
+							ArrayPool<byte>.Shared.Return(frameBuffer);
                     }
 
-                    lastSocketWrite = Next();
-                }
+					BinaryPrimitives.WriteUInt32LittleEndian(new Span<byte>(encodedBuffer, 0, sizeof(uint)), (uint)encodedSize);
 
-                void QueueByteWrite(byte thing)
+					await lastSocketWrite;
+                    lastSocketWrite = socketStream.WriteAsync(new ReadOnlyMemory<byte>(encodedBuffer, 0, sendBufferSize));
+                }
+                finally
                 {
-                    var awaiting = lastSocketWrite;
-                    async ValueTask Next()
-                    {
-                        await awaiting;
-                        await encodedSocketWriter.WriteAsync(thing);
-                    }
-
-                    lastSocketWrite = Next();
+                    if (encodedBuffer != null)
+                        ArrayPool<byte>.Shared.Return(encodedBuffer);
                 }
-
-                void QueueWriteThreadContext(uint passed_threadid)
-                {
-                    // If its different, send a new thread and reset the timestamp
-                    if (threadId == passed_threadid)
-                        return;
-
-                    threadId = passed_threadid;
-                    timestamp = 0;
-
-                    // Make the event
-                    NetworkThreadContext netthread_event = new NetworkThreadContext()
-                    {
-                        ThreadId = passed_threadid,
-                        Type = Constants.NetworkEventThreadContext
-                    };
-
-                    // And fire
-                    QueueNetworkWrite(netthread_event);
-                }
-
-                void QueueWriteStringResponse(char[] str, ulong pointer, byte stringtype)
-                {
-                    // Get the length of the array
-                    ushort string_length = (ushort)str.Length;
-
-                    // Make the event
-                    NetworkStringData string_packet = new NetworkStringData()
-                    {
-                        Type = stringtype,
-                        Pointer = pointer,
-                        StringLength = string_length,
-                        String = str
-                    };
-
-                    // And fire
-                    QueueNetworkWrite(string_packet);
-                }
-
-                Log.Logger.Information("Sending proc events to client...");
-
-                // Now read file events and send them off
-                // A FileEvent is 24 bytes (maximum), so read into an array of that size
-                while (true)
-                {
-                    // Make a new event and read the binary in from the file
-                    FileEvent file_event = new FileEvent();
-                    if (!await file_event.Read(br))
-                        break;
-
-                    // Figure out what event we have
-                    switch (file_event.Type)
-                    {
-                        // Handle ZoneBegin event
-                        case Constants.FileEventZoneBegin:
-                            FileZoneBegin file_zonebegin = (FileZoneBegin)file_event.Event;
-                            QueueWriteThreadContext(file_zonebegin.ThreadId);
-
-                            NetworkZoneBegin network_startevent = new NetworkZoneBegin()
-                            {
-                                Type = Constants.NetworkEventZoneBegin,
-                                Timestamp = file_zonebegin.Timestamp - timestamp,
-                                SourceLocation = file_zonebegin.SourceLocation
-                            };
-
-                            QueueNetworkWrite(network_startevent);
-                            timestamp = file_zonebegin.Timestamp;
-                            break;
+            }
 
 
-                        // Handle ZoneEnd event
-                        case Constants.FileEventZoneEnd:
-                            FileZoneEnd file_zoneend = (FileZoneEnd)file_event.Event;
-                            QueueWriteThreadContext(file_zoneend.ThreadId);
+            async ValueTask NewFrame()
+            {
+                await CloseFrame();
+                frameBuffer = ArrayPool<byte>.Shared.Rent(maximumFrameSize);
+				frameStream = new MemoryStream(frameBuffer, 0, maximumFrameSize, true, false);
+                Debug.Assert(frameStream.Position == 0);
+                frameWriter = new AsyncBinaryWriter(frameStream, Encoding.ASCII, true);
+			}
 
-                            NetworkZoneEnd network_endevent = new NetworkZoneEnd()
-                            {
-                                Type = Constants.NetworkEventZoneEnd,
-                                Timestamp = file_zoneend.Timestamp - timestamp
-                            };
-
-                            QueueNetworkWrite(network_endevent);
-                            timestamp = file_zoneend.Timestamp;
-                            break;
-
-
-                        // Handle ZoneColour event
-                        case Constants.FileEventZoneColour:
-                            FileZoneColour file_zonecolour = (FileZoneColour)file_event.Event;
-                            QueueWriteThreadContext(file_zonecolour.ThreadId);
-
-                            NetworkZoneColour network_colourevent = new NetworkZoneColour()
-                            {
-                                Type = Constants.NetworkEventZoneColour,
-                                ColourR = (byte)((file_zonecolour.Colour >> 0x00) & 0xFF),
-                                ColourG = (byte)((file_zonecolour.Colour >> 0x08) & 0xFF),
-                                ColourB = (byte)((file_zonecolour.Colour >> 0x10) & 0xFF)
-                            };
-
-                            QueueNetworkWrite(network_colourevent);
-                            break;
-
-
-                        // Handle FrameMark event
-                        case Constants.FileEventFrameMark:
-                            FileFrameMark file_framemarkevent = (FileFrameMark)file_event.Event;
-
-                            NetworkFrameMark network_framemarkevent = new NetworkFrameMark()
-                            {
-                                Type = Constants.NetworkEventFrameMark,
-                                Name = 0,
-                                Timestamp = file_framemarkevent.Timestamp
-                            };
-
-                            QueueNetworkWrite(network_framemarkevent);
-                            break;
-                    }
-                }
-
-				// We have read all the proc events, dump to the network and start the next
-				Log.Logger.Information("Flushung proc events...");
-				await lastSocketWrite;
-                lastSocketWrite = ValueTask.CompletedTask;
-
-                await lz4Stream.FlushAsync();
-
-                Log.Logger.Information("Proc events sent. Negotiating string info.");
-
-                // Set this timeout to account for the fact we dont handle the data done packet if that even exists
-                socket.ReceiveTimeout = 1;
+			try
+			{
+                ValueTask lastFrameWrite = NewFrame();
                 try
                 {
-                    using var receiveReader = new AsyncBinaryReader(socketStream, Encoding.UTF8, true);
+                    void QueueEncodedWrite(StructureBase next)
+                    {
+                        var awaiting = lastFrameWrite;
+                        async ValueTask Next()
+                        {
+                            await awaiting;
+                            if (frameStream!.Position + next.WriteSize > maximumFrameSize)
+                                await NewFrame();
+
+                            await next.Write(frameWriter!);
+                        }
+
+                        lastFrameWrite = Next();
+                    }
+
+                    void QueueEncodedByteWrite(byte thing)
+                    {
+                        var awaiting = lastFrameWrite;
+                        async ValueTask Next()
+                        {
+                            await awaiting;
+                            if (frameStream!.Position + +1 > maximumFrameSize)
+                                await NewFrame();
+
+                            await frameWriter!.WriteAsync(thing);
+                        }
+
+                        lastFrameWrite = Next();
+                    }
+
+                    void QueueWriteThreadContext(uint passed_threadid)
+                    {
+                        // If its different, send a new thread and reset the timestamp
+                        if (threadId == passed_threadid)
+                            return;
+
+                        threadId = passed_threadid;
+                        timestamp = 0;
+
+                        // Make the event
+                        NetworkThreadContext netthread_event = new NetworkThreadContext()
+                        {
+                            ThreadId = passed_threadid,
+                            Type = Constants.NetworkEventThreadContext
+                        };
+
+                        // And fire
+                        QueueEncodedWrite(netthread_event);
+                    }
+
+                    void QueueWriteStringResponse(string str, ulong pointer, byte stringtype)
+                    {
+                        // Get the length of the array
+                        ushort string_length = (ushort)str.Length;
+
+                        // Make the event
+                        NetworkStringData string_packet = new NetworkStringData()
+                        {
+                            Type = stringtype,
+                            Pointer = pointer,
+                            String = str
+                        };
+
+                        // And fire
+                        QueueEncodedWrite(string_packet);
+                    }
+
+                    Log.Logger.Information("Sending proc events to client...");
+
+                    // Now read file events and send them off
+                    // A FileEvent is 24 bytes (maximum), so read into an array of that size
                     while (true)
                     {
-                        // Decode the request
-                        NetworkRequest nr = new NetworkRequest();
-                        if (!await nr.Read(receiveReader))
+                        // Make a new event and read the binary in from the file
+                        FileEvent file_event = new FileEvent();
+                        if (!await file_event.Read(br))
                             break;
 
-
-                        // Figure out what we have
-                        switch (nr.Type)
+                        // Figure out what event we have
+                        switch (file_event.Type)
                         {
-                            // Source location query, handle it
-                            case Constants.NetworkQuerySrcloc:
-                                SourceLocation sourceloc = source_locations[BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer))];
-                                NetworkSourceLocation sourceloc_packet = new NetworkSourceLocation()
+                            // Handle ZoneBegin event
+                            case Constants.FileEventZoneBegin:
+                                FileZoneBegin file_zonebegin = (FileZoneBegin)file_event.Event;
+                                QueueWriteThreadContext(file_zonebegin.ThreadId);
+
+                                NetworkZoneBegin network_startevent = new NetworkZoneBegin()
                                 {
-                                    Type = Constants.NetworkEventSrcloc,
-                                    Name = sourceloc.Name,
-                                    Function = sourceloc.Function,
-                                    File = sourceloc.File,
-                                    Line = sourceloc.Line,
-                                    ColourR = (byte)((sourceloc.Colour >> 0x00) & 0xFF),
-                                    ColourG = (byte)((sourceloc.Colour >> 0x08) & 0xFF),
-                                    ColourB = (byte)((sourceloc.Colour >> 0x10) & 0xFF)
+                                    Type = Constants.NetworkEventZoneBegin,
+                                    Timestamp = file_zonebegin.Timestamp - timestamp,
+                                    SourceLocation = file_zonebegin.SourceLocation
                                 };
-                                QueueNetworkWrite(sourceloc_packet);
+
+                                QueueEncodedWrite(network_startevent);
+                                timestamp = file_zonebegin.Timestamp;
                                 break;
 
-                            // String query, handle it
-                            case Constants.NetworkQueryString:
-                                QueueWriteStringResponse(strings[nr.Pointer].ToCharArray(), BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseStringData);
+
+                            // Handle ZoneEnd event
+                            case Constants.FileEventZoneEnd:
+                                FileZoneEnd file_zoneend = (FileZoneEnd)file_event.Event;
+                                QueueWriteThreadContext(file_zoneend.ThreadId);
+
+                                NetworkZoneEnd network_endevent = new NetworkZoneEnd()
+                                {
+                                    Type = Constants.NetworkEventZoneEnd,
+                                    Timestamp = file_zoneend.Timestamp - timestamp
+                                };
+
+                                QueueEncodedWrite(network_endevent);
+                                timestamp = file_zoneend.Timestamp;
                                 break;
 
-                            // No symbol code handling
-                            case Constants.NetworkQuerySymbolCode:
-                                QueueByteWrite(Constants.NetworkResponseSymbolCodeNotAvailable);
+
+                            // Handle ZoneColour event
+                            case Constants.FileEventZoneColour:
+                                FileZoneColour file_zonecolour = (FileZoneColour)file_event.Event;
+                                QueueWriteThreadContext(file_zonecolour.ThreadId);
+
+                                NetworkZoneColour network_colourevent = new NetworkZoneColour()
+                                {
+                                    Type = Constants.NetworkEventZoneColour,
+                                    ColourR = (byte)((file_zonecolour.Colour >> 0x00) & 0xFF),
+                                    ColourG = (byte)((file_zonecolour.Colour >> 0x08) & 0xFF),
+                                    ColourB = (byte)((file_zonecolour.Colour >> 0x10) & 0xFF)
+                                };
+
+                                QueueEncodedWrite(network_colourevent);
                                 break;
 
-                            // No source code handling
-                            case Constants.NetworkQuerySourceCode:
-                                QueueByteWrite(Constants.NetworkResponseSourceCodeNotAvailable);
-                                break;
 
-                            // No data transfer handling
-                            case Constants.NetworkQueryDataTransfer:
-                                QueueByteWrite(Constants.NetworkResponseServerQueryNoop);
-                                break;
+                            // Handle FrameMark event
+                            case Constants.FileEventFrameMark:
+                                FileFrameMark file_framemarkevent = (FileFrameMark)file_event.Event;
 
-                            // No partial data transfer handling
-                            case Constants.NetworkQueryDataTransferPart:
-                                QueueByteWrite(Constants.NetworkResponseServerQueryNoop);
-                                break;
+                                NetworkFrameMark network_framemarkevent = new NetworkFrameMark()
+                                {
+                                    Type = Constants.NetworkEventFrameMark,
+                                    Name = 0,
+                                    Timestamp = file_framemarkevent.Timestamp
+                                };
 
-                            // Handle thread names. Only one.
-                            case Constants.NetworkQueryThreadString:
-                                QueueWriteStringResponse("main".ToCharArray(), BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseThreadName);
-                                break;
-
-                            // Infom on packets we dont recognise
-                            default:
-                                Log.Logger.Warning($"Unknown request from Tracy (Packet type: {nr.Type})");
+                                QueueEncodedWrite(network_framemarkevent);
                                 break;
                         }
                     }
-                }
-                catch (SocketException exc)
-                {
-                    // Timeouts are expected since we dont parse the "done" message
-                    if (exc.SocketErrorCode != SocketError.TimedOut)
+
+                    // We have read all the proc events, dump to the network and start the next
+                    Log.Logger.Information("Flushing proc events...");
+                    await lastFrameWrite;
+                    lastFrameWrite = ValueTask.CompletedTask;
+                    await lastSocketWrite;
+                    lastSocketWrite = ValueTask.CompletedTask;
+
+                    await NewFrame();
+
+                    Log.Logger.Information("Proc events sent. Negotiating string info.");
+
+                    // Set this timeout to account for the fact we dont handle the data done packet if that even exists
+                    socket.ReceiveTimeout = 1;
+                    try
                     {
-                        // If its not a timeout, kick up a fuss
-                        throw exc;
+                        using var receiveReader = new AsyncBinaryReader(socketStream, Encoding.UTF8, true);
+                        while (true)
+                        {
+                            // Decode the request
+                            NetworkRequest nr = new NetworkRequest();
+                            if (!await nr.Read(receiveReader))
+                                break;
+
+
+                            // Figure out what we have
+                            switch (nr.Type)
+                            {
+                                // Source location query, handle it
+                                case Constants.NetworkQuerySrcloc:
+                                    SourceLocation sourceloc = source_locations[BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer))];
+                                    NetworkSourceLocation sourceloc_packet = new NetworkSourceLocation()
+                                    {
+                                        Type = Constants.NetworkEventSrcloc,
+                                        Name = sourceloc.Name,
+                                        Function = sourceloc.Function,
+                                        File = sourceloc.File,
+                                        Line = sourceloc.Line,
+                                        ColourR = (byte)((sourceloc.Colour >> 0x00) & 0xFF),
+                                        ColourG = (byte)((sourceloc.Colour >> 0x08) & 0xFF),
+                                        ColourB = (byte)((sourceloc.Colour >> 0x10) & 0xFF)
+                                    };
+                                    QueueEncodedWrite(sourceloc_packet);
+                                    break;
+
+                                // String query, handle it
+                                case Constants.NetworkQueryString:
+                                    QueueWriteStringResponse(strings[nr.Pointer], BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseStringData);
+                                    break;
+
+                                // No symbol code handling
+                                case Constants.NetworkQuerySymbolCode:
+                                    QueueEncodedByteWrite(Constants.NetworkResponseSymbolCodeNotAvailable);
+                                    break;
+
+                                // No source code handling
+                                case Constants.NetworkQuerySourceCode:
+                                    QueueEncodedByteWrite(Constants.NetworkResponseSourceCodeNotAvailable);
+                                    break;
+
+                                // No data transfer handling
+                                case Constants.NetworkQueryDataTransfer:
+                                    QueueEncodedByteWrite(Constants.NetworkResponseServerQueryNoop);
+                                    break;
+
+                                // No partial data transfer handling
+                                case Constants.NetworkQueryDataTransferPart:
+                                    QueueEncodedByteWrite(Constants.NetworkResponseServerQueryNoop);
+                                    break;
+
+                                // Handle thread names. Only one.
+                                case Constants.NetworkQueryThreadString:
+                                    QueueWriteStringResponse("main", BitConverter.ToUInt64(BitConverter.GetBytes(nr.Pointer)), Constants.NetworkResponseThreadName);
+                                    break;
+
+                                // Infom on packets we dont recognise
+                                default:
+                                    Log.Logger.Warning($"Unknown request from Tracy (Packet type: {nr.Type})");
+                                    break;
+                            }
+                        }
+                    }
+                    catch (SocketException exc)
+                    {
+                        // Timeouts are expected since we dont parse the "done" message
+                        if (exc.SocketErrorCode != SocketError.TimedOut)
+                        {
+                            // If its not a timeout, kick up a fuss
+                            throw exc;
+                        }
                     }
                 }
-
-                // Dump it all
-                await lastSocketWrite;
-                await lz4Stream.FlushAsync();
+                finally
+                {
+                    await lastFrameWrite;
+                }
             }
+            finally
+			{
+				// Dump it all
+				await CloseFrame();
+            }
+
+            await lastSocketWrite;
 
             Log.Logger.Information("Data transfer complete");
 

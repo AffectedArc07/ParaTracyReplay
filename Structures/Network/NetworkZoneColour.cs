@@ -4,7 +4,9 @@ namespace ParaTracyReplay.Structures.Network
 {
     sealed class NetworkZoneColour : StructureBase
     {
-        public byte Type { get; set; }
+        public override int WriteSize => 4;
+
+		public byte Type { get; set; }
         public byte ColourR { get; set; }
         public byte ColourG { get; set; }
         public byte ColourB { get; set; }

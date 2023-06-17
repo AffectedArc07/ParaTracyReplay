@@ -4,7 +4,9 @@ namespace ParaTracyReplay.Structures.Network
 {
     sealed class NetworkZoneBegin : StructureBase
     {
-        public byte Type { get; set; }
+        public override int WriteSize => 9;
+
+		public byte Type { get; set; }
         public long Timestamp { get; set; }
         public ulong SourceLocation { get; set; }
 

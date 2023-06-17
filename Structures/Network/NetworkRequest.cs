@@ -4,7 +4,9 @@ namespace ParaTracyReplay.Structures.Network
 {
     internal class NetworkRequest : StructureBase
     {
-        public byte Type { get; set; }
+		public override int WriteSize => 1 + 8 + 4;
+
+		public byte Type { get; set; }
         public long Pointer { get; set; }
         public uint Extra { get; set; }
 

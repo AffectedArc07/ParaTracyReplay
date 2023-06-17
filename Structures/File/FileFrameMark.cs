@@ -6,11 +6,13 @@ namespace ParaTracyReplay.Structures.File
     /// Represents a frame mark event inside of the data file.
     /// </summary>
     sealed class FileFrameMark : StructureBase
-    {
-        /// <summary>
-        /// The name of the marker, expressed as a <see cref="uint"/> pointer.
-        /// </summary>
-        public uint Name { get; set; }
+	{
+		public override int WriteSize => 16;
+
+		/// <summary>
+		/// The name of the marker, expressed as a <see cref="uint"/> pointer.
+		/// </summary>
+		public uint Name { get; set; }
 
         /// <summary>
         /// The timestamp of the marker, expressed as a <see cref="long"/>.

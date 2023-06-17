@@ -4,7 +4,22 @@ namespace ParaTracyReplay.Structures.Network
 {
     internal class NetworkHeader : StructureBase
     {
-        public double Multiplier { get; set; }
+        public override int WriteSize => sizeof(double)
+            + sizeof(long)
+            + sizeof(long)
+            + sizeof(long)
+            + sizeof(long)
+            + sizeof(long)
+            + sizeof(long)
+            + sizeof(long)
+            + sizeof(long)
+            + 1
+            + 12
+            + 4
+            + 64
+            + 1024;
+
+		public double Multiplier { get; set; }
         public long InitBegin { get; set; }
         public long InitEnd { get; set; }
         public long Delay { get; set; }

@@ -4,17 +4,18 @@ namespace ParaTracyReplay.Structures.Network
 {
     sealed class NetworkStringData : StructureBase
     {
-        public byte Type { get; set; }
+		public override int WriteSize => 1 + 8 + 2 + String.Length;
+
+		public byte Type { get; set; }
         public ulong Pointer { get; set; }
-        public ushort StringLength { get; set; }
-        public char[] String { get; set; } = Array.Empty<char>();
+        public string String { get; set; } = String.Empty;
 
         /// <inheritdoc/>
         public override async ValueTask Write(AsyncBinaryWriter writer)
         {
             await writer.WriteAsync(Type);
             await writer.WriteAsync(Pointer);
-            await writer.WriteAsync(StringLength);
+            await writer.WriteAsync((ushort)String.Length);
             await writer.WriteAsync(String);
         }
 
@@ -23,8 +24,8 @@ namespace ParaTracyReplay.Structures.Network
         {
             Type = await reader.ReadByteAsync();
             Pointer = await reader.ReadUInt64Async();
-            StringLength = await reader.ReadUInt16Async();
-            String = await reader.ReadCharsAsync(StringLength);
+            var stringLength = await reader.ReadUInt16Async();
+            String = (await reader.ReadCharsAsync(stringLength))?.ToString() ?? String.Empty;
         }
     }
 }

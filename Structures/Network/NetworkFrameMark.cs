@@ -4,7 +4,9 @@ namespace ParaTracyReplay.Structures.Network
 {
     internal class NetworkFrameMark : StructureBase
     {
-        public byte Type { get; set; }
+        public override int WriteSize => 17;
+
+		public byte Type { get; set; }
         public long Timestamp { get; set; }
         public ulong Name { get; set; }
 

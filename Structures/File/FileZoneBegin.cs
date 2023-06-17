@@ -7,10 +7,12 @@ namespace ParaTracyReplay.Structures
     /// </summary>
     sealed class FileZoneBegin : StructureBase
     {
-        /// <summary>
-        /// The ID of the thread we are currently on.
-        /// </summary>
-        public uint ThreadId { get; set; } 
+        public override int WriteSize => 16;
+
+		/// <summary>
+		/// The ID of the thread we are currently on.
+		/// </summary>
+		public uint ThreadId { get; set; } 
 
         /// <summary>
         /// The source location pointer.

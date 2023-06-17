@@ -8,6 +8,8 @@ namespace ParaTracyReplay.Structures
     /// </summary>
     abstract class StructureBase 
     {
+        public abstract int WriteSize { get; }
+
         /// <summary>
         /// Prepares the data to be written to another stream as a <see cref="byte"/> array.
         /// </summary>

@@ -7,6 +7,8 @@ namespace ParaTracyReplay.Structures.File
     /// </summary>
     sealed class FileEvent : StructureBase
     {
+        public override int WriteSize => 8 + Event.WriteSize;
+
         /// <summary>
         /// The contained event in the file.
         /// </summary>
@@ -32,6 +34,9 @@ namespace ParaTracyReplay.Structures.File
         public override async ValueTask ReadImpl(AsyncBinaryReader reader)
         {
             // Skip the padding
+            if (reader.BaseStream.Position + 24 > reader.BaseStream.Length)
+                throw new EndOfStreamException();
+
             Type = (await reader.ReadBytesAsync(8))[0];
 
             // Parse the event type
