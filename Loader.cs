@@ -219,7 +219,7 @@ namespace ParaTracyReplay
             await using var socketStream = new NetworkStream(socket, false);
 
             // Setup some vars for the network handling
-            int event_array_size = 24;
+            const int event_array_size = 24;
             long timestamp = 0;
             long threadId = 0;
 
