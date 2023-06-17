@@ -162,41 +162,24 @@ namespace ParaTracyReplay
             string client_name;
             try
             {
-                await socket.ReceiveAsync(new ArraySegment<byte>(data_buffer), SocketFlags.None);
-                client_name = Encoding.ASCII.GetString(data_buffer);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(data_buffer);
-            }
+                await socket.ReceiveAsync(new ArraySegment<byte>(data_buffer, 0, 8), SocketFlags.None);
+                client_name = Encoding.ASCII.GetString(data_buffer, 0, 8);
 
-            // Validate its a Tracy client
-            if (client_name != "TracyPrf")
-            {
-                Log.Logger.Fatal($"Invalid client (Expected \"TracyPrf\", got \"{client_name}\")");
-                return 1;
-            }
+                // Validate its a Tracy client
+                if (client_name != "TracyPrf")
+                {
+                    Log.Logger.Fatal($"Invalid client (Expected \"TracyPrf\", got \"{client_name}\")");
+                    return 1;
+                }
 
-            // Read 4 bytes for protocol number
-            data_buffer = ArrayPool<byte>.Shared.Rent(4);
-            uint protocol_version;
-            try
-            {
-                await socket.ReceiveAsync(new ArraySegment<byte>(data_buffer), SocketFlags.None);
-                protocol_version = BitConverter.ToUInt32(data_buffer);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(data_buffer);
-            }
+                // Read 4 bytes for protocol number
+                await socket.ReceiveAsync(new ArraySegment<byte>(data_buffer, 0, 4), SocketFlags.None);
+                uint protocol_version = BitConverter.ToUInt32(data_buffer);
 
-            // We only support these protocol versions
-            uint[] valid_versions = new uint[] { 56, 57 };
+                // We only support these protocol versions
+                uint[] valid_versions = new uint[] { 56, 57 };
 
-            // Validate protocol version
-            data_buffer = ArrayPool<byte>.Shared.Rent(1);
-            try
-            {
+                // Validate protocol version
                 if (!valid_versions.Contains(protocol_version))
                 {
                     Log.Logger.Fatal($"Invalid protocol version (Got {protocol_version}, valid versions are {string.Join(", ", valid_versions)})");
@@ -207,14 +190,15 @@ namespace ParaTracyReplay
 
                 // If we got here its a valid version, send our welcome
                 data_buffer[0] = Constants.NetworkHandshakeWelcome;
-                await socket.SendAsync(new ArraySegment<byte>(data_buffer), SocketFlags.None);
+                await socket.SendAsync(new ArraySegment<byte>(data_buffer, 0, 1), SocketFlags.None);
             }
-            finally {
+            finally
+            {
                 ArrayPool<byte>.Shared.Return(data_buffer);
             }
 
-            // Make our network header from the file header
-            NetworkHeader net_header = new NetworkHeader();
+			// Make our network header from the file header
+			NetworkHeader net_header = new NetworkHeader();
             net_header.Multiplier = file_header.Multiplier;
             net_header.InitBegin = file_header.InitBegin;
             net_header.InitEnd = file_header.InitEnd;
