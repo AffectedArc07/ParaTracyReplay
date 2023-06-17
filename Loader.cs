@@ -381,8 +381,9 @@ namespace ParaTracyReplay
                     }
                 }
 
-                // We have read all the proc events, dump to the network and start the next
-                await lastSocketWrite;
+				// We have read all the proc events, dump to the network and start the next
+				Log.Logger.Information("Flushung proc events...");
+				await lastSocketWrite;
                 lastSocketWrite = ValueTask.CompletedTask;
 
                 await lz4Stream.FlushAsync();
