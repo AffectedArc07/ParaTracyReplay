@@ -101,10 +101,10 @@ namespace ParaTracyReplay
                 if (!string.IsNullOrWhiteSpace(loc_name))
                 {
                     name_int = loc_name.GetHashCode();
-                    while (strings.ContainsKey(name_int))
+                    while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != loc_name)
                         ++name_int;
 
-                    strings.Add(name_int, loc_name);
+                    strings[name_int] = loc_name;
                 }
 
                 // And of the function
@@ -112,10 +112,10 @@ namespace ParaTracyReplay
                 if (!string.IsNullOrWhiteSpace(function_name))
                 {
                     function_int = function_name.GetHashCode();
-                    while (strings.ContainsKey(function_int))
-                        ++function_int;
+					while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != function_name)
+						++function_int;
 
-                    strings.Add(function_int, function_name);
+                    strings[function_int] = function_name;
                 }
 
                 // And of the file
@@ -123,10 +123,10 @@ namespace ParaTracyReplay
                 if (!string.IsNullOrWhiteSpace(file_name))
                 {
                     file_int = file_name.GetHashCode();
-                    while (strings.ContainsKey(file_int))
-                        ++file_int;
+					while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != file_name)
+						++file_int;
 
-                    strings.Add(file_int, file_name);
+                    strings[file_int] = file_name;
                 }
 
                 // And pack it all into a nice object
