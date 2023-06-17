@@ -9,15 +9,15 @@ namespace ParaTracyReplay.Structures
     {
         public override int WriteSize => 16;
 
-		/// <summary>
-		/// The ID of the thread we are currently on.
-		/// </summary>
-		public uint ThreadId { get; set; } 
+        /// <summary>
+        /// The ID of the thread we are currently on.
+        /// </summary>
+        public uint ThreadId { get; set; }
 
         /// <summary>
         /// The source location pointer.
         /// </summary>
-        public uint SourceLocation { get; set; } 
+        public uint SourceLocation { get; set; }
 
         /// <summary>
         /// The timestamp this zone begins at.

@@ -5,7 +5,7 @@ namespace ParaTracyReplay.Structures.Network
     internal class NetworkSourceLocation : StructureBase
     {
         public override int WriteSize => 1 + 8 + 8 + 8 + 4 + 3;
-		public byte Type { get; set; }
+        public byte Type { get; set; }
         public long Name { get; set; }
         public long Function { get; set; }
         public long File { get; set; }

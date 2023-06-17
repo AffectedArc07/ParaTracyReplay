@@ -6,7 +6,7 @@ namespace ParaTracyReplay.Structures
     /// Represents the header inside of the data file.
     /// </summary>
     sealed class FileHeader : StructureBase
-	{
+    {
         public override int WriteSize => sizeof(ulong)
             + sizeof(uint)
             + sizeof(double)
@@ -25,10 +25,10 @@ namespace ParaTracyReplay.Structures
             + 64
             + 1024;
 
-		/// <summary>
-		/// The signature of the file expressed as a <see cref="ulong"/>.
-		/// </summary>
-		public ulong Signature { get; set; }
+        /// <summary>
+        /// The signature of the file expressed as a <see cref="ulong"/>.
+        /// </summary>
+        public ulong Signature { get; set; }
 
         /// <summary>
         /// The version of the file, expressed as a <see cref="uint"/>.
@@ -113,7 +113,8 @@ namespace ParaTracyReplay.Structures
         /// <summary>
         /// Creates a new <see cref="FileHeader"/>.
         /// </summary>
-        public FileHeader() {
+        public FileHeader()
+        {
             // Setup the byte arrays
             CpuManufacturer = new char[12];
             ProgramName = new char[64];
@@ -161,11 +162,11 @@ namespace ParaTracyReplay.Structures
             Flags = await reader.ReadByteAsync();                 // ("flags", ctypes.c_byte),                    Start at 88, read 1 byte                POS:   89
             CpuArch = await reader.ReadByteAsync();               // ("cpu_arch", ctypes.c_byte),                 Start at 89, read 1 byte                POS:   90
             CpuManufacturer = await reader.ReadCharsAsync(12);    // ("cpu_manufacturer", ctypes.c_char * 12),    Start at 90, read 12 bytes              POS:  102
-			reader.BaseStream.Seek(2, SeekOrigin.Current);        //                                              Skip 2 bytes due to alignment rules     POS:  104
-			CpuId = await reader.ReadUInt32Async();               // ("cpu_id", ctypes.c_uint),                   Start at 104, read 4 bytes              POS:  108
+            reader.BaseStream.Seek(2, SeekOrigin.Current);        //                                              Skip 2 bytes due to alignment rules     POS:  104
+            CpuId = await reader.ReadUInt32Async();               // ("cpu_id", ctypes.c_uint),                   Start at 104, read 4 bytes              POS:  108
             ProgramName = await reader.ReadCharsAsync(64);        // ("program_name", ctypes.c_char * 64),        Start at 108, read 64 bytes             POS:  172
             HostInfo = await reader.ReadCharsAsync(1024);         // ("host_info", ctypes.c_char * 1024)          Start at 172, read 1024 bytes           POS: 1196
-			reader.BaseStream.Seek(4, SeekOrigin.Current);        //                                              Skip 4 bytes due to alignment rules     POS: 1200
-		}
+            reader.BaseStream.Seek(4, SeekOrigin.Current);        //                                              Skip 4 bytes due to alignment rules     POS: 1200
+        }
     }
 }

@@ -6,7 +6,7 @@ namespace ParaTracyReplay.Structures.Network
     {
         public override int WriteSize => 5;
 
-		public byte Type { get; set; }
+        public byte Type { get; set; }
         public uint ThreadId { get; set; }
 
         /// <inheritdoc/>

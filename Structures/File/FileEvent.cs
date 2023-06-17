@@ -37,30 +37,25 @@ namespace ParaTracyReplay.Structures.File
         {
             // Skip the padding
             var expectedNewPosition = reader.BaseStream.Position + 24;
-			if (expectedNewPosition > reader.BaseStream.Length)
+            if (expectedNewPosition > reader.BaseStream.Length)
                 throw new EndOfStreamException();
 
-			Type = await reader.ReadByteAsync();
+            Type = await reader.ReadByteAsync();
 
-			Debug.Assert(Type != 0);
+            reader.BaseStream.Seek(7, SeekOrigin.Current);
 
-			reader.BaseStream.Seek(7, SeekOrigin.Current);
-
-			// Parse the event type
-			// Cast it based on the event type
-			_backingEvent = Type switch
+            // Parse the event type
+            // Cast it based on the event type
+            _backingEvent = Type switch
             {
                 Constants.FileEventZoneBegin => new FileZoneBegin(),
                 Constants.FileEventZoneEnd => new FileZoneEnd(),
                 Constants.FileEventZoneColour => new FileZoneColour(),
                 Constants.FileEventFrameMark => new FileFrameMark(),
-                _ => throw new InvalidOperationException($"Unknown event type: {Type}"),
             };
 
             // And read the data in
             await Event.ReadImpl(reader);
-
-            Debug.Assert(reader.BaseStream.Position == expectedNewPosition);
         }
     }
 }

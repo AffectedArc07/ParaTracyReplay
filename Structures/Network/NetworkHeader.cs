@@ -19,7 +19,7 @@ namespace ParaTracyReplay.Structures.Network
             + 64
             + 1024;
 
-		public double Multiplier { get; set; }
+        public double Multiplier { get; set; }
         public long InitBegin { get; set; }
         public long InitEnd { get; set; }
         public long Delay { get; set; }
@@ -35,7 +35,8 @@ namespace ParaTracyReplay.Structures.Network
         public char[] ProgramName { get; set; }
         public char[] HostInfo { get; set; }
 
-        public NetworkHeader() {
+        public NetworkHeader()
+        {
             CpuManufacturer = new char[12];
             ProgramName = new char[64];
             HostInfo = new char[1024];

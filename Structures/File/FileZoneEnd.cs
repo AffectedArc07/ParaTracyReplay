@@ -6,14 +6,14 @@ namespace ParaTracyReplay.Structures
     /// Represents a zone end event inside of the data file.
     /// </summary>
     sealed class FileZoneEnd : StructureBase
-	{
-		public override int WriteSize => 16;
+    {
+        public override int WriteSize => 16;
 
-		/// <summary>
-		/// The ID of the thread we are applying this zone event to.
-		/// I feel like this might actually be a different ID but oh well.
-		/// </summary>
-		public uint ThreadId { get; set; }
+        /// <summary>
+        /// The ID of the thread we are applying this zone event to.
+        /// I feel like this might actually be a different ID but oh well.
+        /// </summary>
+        public uint ThreadId { get; set; }
 
         /// <summary>
         /// The timestamp this zone ends.

@@ -4,9 +4,9 @@ namespace ParaTracyReplay.Structures.Network
 {
     sealed class NetworkStringData : StructureBase
     {
-		public override int WriteSize => 1 + 8 + 2 + String.Length;
+        public override int WriteSize => 1 + 8 + 2 + String.Length;
 
-		public byte Type { get; set; }
+        public byte Type { get; set; }
         public ulong Pointer { get; set; }
         public char[] String { get; set; } = Array.Empty<char>();
 

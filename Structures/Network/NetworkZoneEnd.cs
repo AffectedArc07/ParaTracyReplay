@@ -6,14 +6,14 @@ namespace ParaTracyReplay.Structures.Network
     {
         public override int WriteSize => 9;
 
-		public byte Type { get; set; }
+        public byte Type { get; set; }
         public long Timestamp { get; set; }
 
         /// <inheritdoc/>
         public override async ValueTask Write(AsyncBinaryWriter writer)
         {
             await writer.WriteAsync(Type);
-			await writer.WriteAsync(Timestamp);
+            await writer.WriteAsync(Timestamp);
         }
 
         /// <inheritdoc/>

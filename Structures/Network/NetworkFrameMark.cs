@@ -6,7 +6,7 @@ namespace ParaTracyReplay.Structures.Network
     {
         public override int WriteSize => 17;
 
-		public byte Type { get; set; }
+        public byte Type { get; set; }
         public long Timestamp { get; set; }
         public ulong Name { get; set; }
 
