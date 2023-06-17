@@ -118,7 +118,7 @@ namespace ParaTracyReplay
                 if (!string.IsNullOrWhiteSpace(function_name))
                 {
                     function_int = function_name.GetHashCode();
-                    while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != function_name)
+                    while (strings.TryGetValue(function_int, out string? hash_match) && hash_match != function_name)
                         ++function_int;
 
                     strings[function_int] = function_name;
@@ -129,7 +129,7 @@ namespace ParaTracyReplay
                 if (!string.IsNullOrWhiteSpace(file_name))
                 {
                     file_int = file_name.GetHashCode();
-                    while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != file_name)
+                    while (strings.TryGetValue(file_int, out string? hash_match) && hash_match != file_name)
                         ++file_int;
 
                     strings[file_int] = file_name;
