@@ -109,22 +109,34 @@ namespace ParaTracyReplay {
 
                         // Get the int of the name
                         long name_int = 0;
-                        if (!string.IsNullOrWhiteSpace(loc_name)) {
+                        if (!string.IsNullOrWhiteSpace(loc_name))
+                        {
                             name_int = loc_name.GetHashCode();
+                            while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != loc_name)
+                                ++name_int;
+
                             strings[name_int] = loc_name;
                         }
 
                         // And of the function
                         long function_int = 0;
-                        if (!string.IsNullOrWhiteSpace(function_name)) {
+                        if (!string.IsNullOrWhiteSpace(function_name))
+                        {
                             function_int = function_name.GetHashCode();
+                            while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != function_name)
+                                ++function_int;
+
                             strings[function_int] = function_name;
                         }
 
                         // And of the file
                         long file_int = 0;
-                        if (!string.IsNullOrWhiteSpace(file_name)) {
+                        if (!string.IsNullOrWhiteSpace(file_name))
+                        {
                             file_int = file_name.GetHashCode();
+                            while (strings.TryGetValue(name_int, out string? hash_match) && hash_match != file_name)
+                                ++file_int;
+
                             strings[file_int] = file_name;
                         }
 
