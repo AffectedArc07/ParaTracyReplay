@@ -1,11 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures.Network {
-    internal class NetworkHeader : StructureBase {
+namespace ParaTracyReplay.Structures.Network
+{
+    internal class NetworkHeader : StructureBase
+    {
         public double Multiplier { get; set; }
         public long InitBegin { get; set; }
         public long InitEnd { get; set; }
@@ -29,47 +27,43 @@ namespace ParaTracyReplay.Structures.Network {
         }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(Multiplier);
-                writer.Write(InitBegin);
-                writer.Write(InitEnd);
-                writer.Write(Delay);
-                writer.Write(Resolution);
-                writer.Write(Epoch);
-                writer.Write(ExecTime);
-                writer.Write(ProcessId);
-                writer.Write(SamplingPeriod);
-                writer.Write(Flags);
-                writer.Write(CpuArch);
-                writer.Write(CpuManufacturer);
-                writer.Write(CpuId);
-                writer.Write(ProgramName);
-                writer.Write(HostInfo);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(Multiplier);
+            await writer.WriteAsync(InitBegin);
+            await writer.WriteAsync(InitEnd);
+            await writer.WriteAsync(Delay);
+            await writer.WriteAsync(Resolution);
+            await writer.WriteAsync(Epoch);
+            await writer.WriteAsync(ExecTime);
+            await writer.WriteAsync(ProcessId);
+            await writer.WriteAsync(SamplingPeriod);
+            await writer.WriteAsync(Flags);
+            await writer.WriteAsync(CpuArch);
+            await writer.WriteAsync(CpuManufacturer);
+            await writer.WriteAsync(CpuId);
+            await writer.WriteAsync(ProgramName);
+            await writer.WriteAsync(HostInfo);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            Multiplier = reader.ReadDouble();
-            InitBegin = reader.ReadInt64();
-            InitEnd = reader.ReadInt64();
-            Delay = reader.ReadInt64();
-            Resolution = reader.ReadInt64();
-            Epoch = reader.ReadInt64();
-            ExecTime = reader.ReadInt64();
-            ProcessId = reader.ReadInt64();
-            SamplingPeriod = reader.ReadInt64();
-            Flags = reader.ReadSByte();
-            CpuArch = reader.ReadSByte();
-            CpuManufacturer = reader.ReadChars(12);
-            CpuId = reader.ReadUInt32();
-            ProgramName = reader.ReadChars(64);
-            HostInfo = reader.ReadChars(1024);
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            Multiplier = await reader.ReadDoubleAsync();
+            InitBegin = await reader.ReadInt64Async();
+            InitEnd = await reader.ReadInt64Async();
+            Delay = await reader.ReadInt64Async();
+            Resolution = await reader.ReadInt64Async();
+            Epoch = await reader.ReadInt64Async();
+            ExecTime = await reader.ReadInt64Async();
+            ProcessId = await reader.ReadInt64Async();
+            SamplingPeriod = await reader.ReadInt64Async();
+            Flags = await reader.ReadSByteAsync();
+            CpuArch = await reader.ReadSByteAsync();
+            CpuManufacturer = await reader.ReadCharsAsync(12);
+            CpuId = await reader.ReadUInt32Async();
+            ProgramName = await reader.ReadCharsAsync(64);
+            HostInfo = await reader.ReadCharsAsync(1024);
         }
     }
 }

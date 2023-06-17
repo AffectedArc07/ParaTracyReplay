@@ -1,10 +1,12 @@
-﻿using System.Text;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures {
+namespace ParaTracyReplay.Structures
+{
     /// <summary>
     /// Represents a zone end event inside of the data file.
     /// </summary>
-    internal class FileZoneEnd : StructureBase {
+    sealed class FileZoneEnd : StructureBase
+    {
         /// <summary>
         /// The ID of the thread we are applying this zone event to.
         /// I feel like this might actually be a different ID but oh well.
@@ -17,25 +19,21 @@ namespace ParaTracyReplay.Structures {
         public long Timestamp { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(ThreadId);
-                // Write 4 padding bytes
-                writer.Write(new byte[4]);
-                writer.Write(Timestamp);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(ThreadId);
+            // Write 4 padding bytes
+            await writer.WriteAsync(0U);
+            await writer.WriteAsync(Timestamp);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            ThreadId = reader.ReadUInt32();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            ThreadId = await reader.ReadUInt32Async();
             // Skip over the 4 padding bytes
-            reader.ReadBytes(4);
-            Timestamp = reader.ReadInt64();
+            await reader.ReadBytesAsync(4);
+            Timestamp = await reader.ReadInt64Async();
         }
     }
 }

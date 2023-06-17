@@ -1,33 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures.Network {
-    internal class NetworkFrameMark : StructureBase {
+namespace ParaTracyReplay.Structures.Network
+{
+    internal class NetworkFrameMark : StructureBase
+    {
         public byte Type { get; set; }
         public long Timestamp { get; set; }
         public ulong Name { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(Type);
-                writer.Write(Timestamp);
-                writer.Write(Name);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(Type);
+            await writer.WriteAsync(Timestamp);
+            await writer.WriteAsync(Name);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            Type = reader.ReadByte();
-            Timestamp = reader.ReadInt64();
-            Name = reader.ReadUInt64();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            Type = await reader.ReadByteAsync();
+            Timestamp = await reader.ReadInt64Async();
+            Name = await reader.ReadUInt64Async();
         }
     }
 }

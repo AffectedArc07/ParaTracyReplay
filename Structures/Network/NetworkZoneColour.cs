@@ -1,32 +1,30 @@
-﻿using System.Text;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures.Network {
-    internal class NetworkZoneColour : StructureBase {
+namespace ParaTracyReplay.Structures.Network
+{
+    sealed class NetworkZoneColour : StructureBase
+    {
         public byte Type { get; set; }
         public byte ColourR { get; set; }
         public byte ColourG { get; set; }
         public byte ColourB { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(Type);
-                writer.Write(ColourR);
-                writer.Write(ColourG);
-                writer.Write(ColourB);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(Type);
+            await writer.WriteAsync(ColourR);
+            await writer.WriteAsync(ColourG);
+            await writer.WriteAsync(ColourB);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            Type = reader.ReadByte();
-            ColourR = reader.ReadByte();
-            ColourG = reader.ReadByte();
-            ColourB = reader.ReadByte();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            Type = await reader.ReadByteAsync();
+            ColourR = await reader.ReadByteAsync();
+            ColourG = await reader.ReadByteAsync();
+            ColourB = await reader.ReadByteAsync();
         }
     }
 }

@@ -1,26 +1,24 @@
-﻿using System.Text;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures.Network {
-    internal class NetworkZoneEnd : StructureBase {
+namespace ParaTracyReplay.Structures.Network
+{
+    sealed class NetworkZoneEnd : StructureBase
+    {
         public byte Type { get; set; }
         public long Timestamp { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(Type);
-                writer.Write(Timestamp);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(Type);
+			await writer.WriteAsync(Timestamp);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            Type = reader.ReadByte();
-            Timestamp = reader.ReadInt64();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            Type = await reader.ReadByteAsync();
+            Timestamp = await reader.ReadInt64Async();
         }
     }
 }

@@ -1,11 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures.Network {
-    internal class NetworkSourceLocation : StructureBase {
+namespace ParaTracyReplay.Structures.Network
+{
+    internal class NetworkSourceLocation : StructureBase
+    {
         public byte Type { get; set; }
         public long Name { get; set; }
         public long Function { get; set; }
@@ -16,33 +14,29 @@ namespace ParaTracyReplay.Structures.Network {
         public byte ColourB { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(Type);
-                writer.Write(Name);
-                writer.Write(Function);
-                writer.Write(File);
-                writer.Write(Line);
-                writer.Write(ColourR);
-                writer.Write(ColourG);
-                writer.Write(ColourB);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(Type);
+            await writer.WriteAsync(Name);
+            await writer.WriteAsync(Function);
+            await writer.WriteAsync(File);
+            await writer.WriteAsync(Line);
+            await writer.WriteAsync(ColourR);
+            await writer.WriteAsync(ColourG);
+            await writer.WriteAsync(ColourB);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            Type = reader.ReadByte();
-            Name = reader.ReadInt64();
-            Function = reader.ReadInt64();
-            File = reader.ReadInt64();
-            Line = reader.ReadUInt32();
-            ColourR = reader.ReadByte();
-            ColourG = reader.ReadByte();
-            ColourB = reader.ReadByte();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            Type = await reader.ReadByteAsync();
+            Name = await reader.ReadInt64Async();
+            Function = await reader.ReadInt64Async();
+            File = await reader.ReadInt64Async();
+            Line = await reader.ReadUInt32Async();
+            ColourR = await reader.ReadByteAsync();
+            ColourG = await reader.ReadByteAsync();
+            ColourB = await reader.ReadByteAsync();
         }
     }
 }

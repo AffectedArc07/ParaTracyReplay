@@ -1,10 +1,12 @@
-﻿using System.Text;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures {
+namespace ParaTracyReplay.Structures
+{
     /// <summary>
     /// Represents a zone begin event inside of the data file.
     /// </summary>
-    internal class FileZoneBegin : StructureBase {
+    sealed class FileZoneBegin : StructureBase
+    {
         /// <summary>
         /// The ID of the thread we are currently on.
         /// </summary>
@@ -21,23 +23,19 @@ namespace ParaTracyReplay.Structures {
         public long Timestamp { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(ThreadId);
-                writer.Write(SourceLocation);
-                writer.Write(Timestamp);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(ThreadId);
+            await writer.WriteAsync(SourceLocation);
+            await writer.WriteAsync(Timestamp);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            ThreadId = reader.ReadUInt32();
-            SourceLocation = reader.ReadUInt32();
-            Timestamp = reader.ReadInt64();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            ThreadId = await reader.ReadUInt32Async();
+            SourceLocation = await reader.ReadUInt32Async();
+            Timestamp = await reader.ReadInt64Async();
         }
     }
 }

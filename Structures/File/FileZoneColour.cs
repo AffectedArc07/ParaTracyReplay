@@ -1,10 +1,12 @@
-﻿using System.Text;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures.File {
+namespace ParaTracyReplay.Structures.File
+{
     /// <summary>
     /// Represents a zone colour event inside of the data file.
     /// </summary>
-    internal class FileZoneColour : StructureBase {
+    sealed class FileZoneColour : StructureBase
+    {
         /// <summary>
         /// The ID of the thread we are applying this zone event to.
         /// I feel like this might actually be a different ID but oh well.
@@ -17,21 +19,17 @@ namespace ParaTracyReplay.Structures.File {
         public uint Colour { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(ThreadId);
-                writer.Write(Colour);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(ThreadId);
+            await writer.WriteAsync(Colour);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            ThreadId = reader.ReadUInt32();
-            Colour = reader.ReadUInt32();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            ThreadId = await reader.ReadUInt32Async();
+            Colour = await reader.ReadUInt32Async();
         }
     }
 }

@@ -1,10 +1,12 @@
-﻿using System.Text;
+﻿using Overby.Extensions.AsyncBinaryReaderWriter;
 
-namespace ParaTracyReplay.Structures.File {
+namespace ParaTracyReplay.Structures.File
+{
     /// <summary>
     /// Represents a frame mark event inside of the data file.
     /// </summary>
-    internal class FileFrameMark : StructureBase {
+    sealed class FileFrameMark : StructureBase
+    {
         /// <summary>
         /// The name of the marker, expressed as a <see cref="uint"/> pointer.
         /// </summary>
@@ -16,25 +18,21 @@ namespace ParaTracyReplay.Structures.File {
         public long Timestamp { get; set; }
 
         /// <inheritdoc/>
-        public override byte[] Write() {
-            MemoryStream stream = new MemoryStream();
-
-            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.ASCII)) {
-                writer.Write(Name);
-                // Write out some padding
-                writer.Write(new byte[4]);
-                writer.Write(Timestamp);
-            }
-
-            return stream.ToArray();
+        public override async ValueTask Write(AsyncBinaryWriter writer)
+        {
+            await writer.WriteAsync(Name);
+            // Write out some padding
+            await writer.WriteAsync(0U);
+            await writer.WriteAsync(Timestamp);
         }
 
         /// <inheritdoc/>
-        public override void Read(BinaryReader reader) {
-            Name = reader.ReadUInt32();
+        public override async ValueTask ReadImpl(AsyncBinaryReader reader)
+        {
+            Name = await reader.ReadUInt32Async();
             // Skip padding bytes
-            reader.ReadBytes(4);
-            Timestamp = reader.ReadInt64();
+            await reader.ReadBytesAsync(4);
+            Timestamp = await reader.ReadInt64Async();
         }
     }
 }
